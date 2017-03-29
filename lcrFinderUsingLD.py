@@ -46,6 +46,14 @@ parser.add_option(
     help='exon dict for exon annotation',
     default='/media/disk2/ljzhang/data/dmdExons/dmd.exons.txt'
     )
+
+parser.add_option(
+    '-W',
+    '--win-size',
+    dest='winSize',
+    help='windows size for sliding, by default this is set to 20',
+    default='20'
+    )
     
 (options,args)=parser.parse_args()
 
@@ -143,12 +151,42 @@ def writeMatrix(infoMat,fileName):
     outfh.close()
     return
 
-def slideWin(infoMat):
-    
+def slideWin(infoMat,winSize):
+    rowNbr=len(infoMat)
+    for i in range(winSize):
+        repEleMat=returnRepEleMat(infoMat,rowNbr,i,winSize)
+        repEleMatRowNbr=len(repEleMat)
+        
+        
     return
   
-
-
+def returnRepEleMat(infoMat,rowNbr,sttRow,winSize):
+    '''
+    repEleMat is a matrix containing rows of elements of RepeatEle
+    '''
+    repEleMat=[]
+    curRow=sttRow
+    while curRow <= rowNbr:
+        tmpList=[]
+        for i in range(curRow,curRow+winSize):
+            '''
+            class RepeatEle:
+                def __init__(self,repName,repOri,repId,repRegion):
+            [sttPos  endPos  orient  eleId  eleFam  lineId  regionAnno]
+            '''
+            tmpList.append(RepeatEle(infoMat[i][3],infoMat[i][2],infoMat[i][5],infoMat[i][6]))
+        repEleMat.append(tmpList)
+        curRow += winSize
+    if curRow < rowNbr:
+        tmpList=[]
+        for i in range(curRow,rowNbr):
+            tmpList.append(RepeatEle(infoMat[i][3],infoMat[i][2],infoMat[i][5],infoMat[i][6]))
+        repEleMat.append(tmpList)
+    return repEleMat
+    
+def processRepList(repEleList1, repEleList2):
+    
+    return
 
 
 
