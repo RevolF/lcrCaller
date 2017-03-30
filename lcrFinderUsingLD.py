@@ -7,7 +7,8 @@ Created on Wed Mar 29 13:28:00 2017
 
 # implementation of lcr_finder using lcs script
 
-import os,glob,re,sys
+from __future__ import division
+import re,sys
 from optparse import OptionParser
 
 parser=OptionParser()
@@ -72,10 +73,12 @@ def main():
     global options
     exonDct=getExonDct(options.exonDct)
     infoMat=splitRpFile(options.rpFile,exonDct)
-    matOutName=options.workDir + '/' + options.rpFile.split('/')[-1].rstrip('out')+'mat.out'
+    rpName=options.rpFile.split('/')[-1].rstrip('out')
+    matOutName=options.workDir + '/' + rpName + 'mat.out'
     writeMatrix(infoMat,matOutName)
-    
-    
+    lcrResFile=options.workDir+'/'+rpName+'.'+options.winSize+'.lcsResMat.out'
+    slideWin(infoMat,options.winSize,lcrResFile,exonDct)
+    return
     
 def splitRpFile(rpFile, exonDct):
     '''
@@ -138,12 +141,6 @@ def getExonDct(dmdExon):
     infh.close()
     return exonDct
 
-def exonAnno(exonDct,sttPos):
-    for key in exonDct.keys:
-        if int(exonDct[key][0]) < int(sttPos) and int(sttPos) <= int(exonDct[key][1]):
-            return key
-    return 'NASTR'
-
 def writeMatrix(infoMat,fileName):
     outfh=open(fileName,'w')
     for subList in infoMat:
@@ -151,13 +148,44 @@ def writeMatrix(infoMat,fileName):
     outfh.close()
     return
 
-def slideWin(infoMat,winSize):
+def slideWin(infoMat,winSize,lcsResFile,exonDct):
+    winSize=int(winSize)
+    
+    outfh=open(lcsResFile,'w')
+    header='winStartPos\twinFirstId\twinNextId\tmatchScore\trepEleLcs\twinFirstLcsOrient\twinNextLcsOrient\twinFirstString\twinNextString\twinFirstRegion\twinNextRegion\n'
+    outfh.write(header)
+    
     rowNbr=len(infoMat)
+    
     for i in range(winSize):
         repEleMat=returnRepEleMat(infoMat,rowNbr,i,winSize)
         repEleMatRowNbr=len(repEleMat)
         
-        
+        for j in range(repEleMatRowNbr):
+            for k in range(j+1,repEleMatRowNbr+1):
+                lcsObj=Lcs(repEleMat[j],repEleMat[k])
+                score=round(200*len(lcsObj.lcs)/(len(lcsObj.colNbr)+len(lcsObj.rowNbr)),3)
+                winFirstLcsOrient=''.join(lcsObj.upperLcsOri)
+                winNextLcsOrient=''.join(lcsObj.lowerLcsOri)
+                winFirstString=','.join(lcsObj.refLong)
+                winNextString=','.join(lcsObj.refShort)
+
+                winFirstStt=min([int(subPos) for subPos in lcsObj.upperLcsSttPos])
+                winFirstEnd=max([int(subPos) for subPos in lcsObj.lowerLcsSttPos])
+                winFirstSttRegion=exonAnno(exonDct,winFirstStt)
+                winFirstEndRegion=exonAnno(exonDct,winFirstEnd)
+                winFirstRegion=winFirstSttRegion+'---'+winFirstEndRegion
+                
+                winNextStt=min([int(subPos) for subPos in lcsObj.lowerLcsSttPos])
+                winNextEnd=max([int(subPos) for subPos in lcsObj.lowerLcsSttPos])
+                winNextSttRegion=exonAnno(exonDct,winNextStt)
+                winNextEndRegion=exonAnno(exonDct,winNextEnd)
+                winNextRegion=winNextSttRegion+'---'+winNextEndRegion
+                
+                writeList=[i,j,k,score,lcsObj.lcs,winFirstLcsOrient,winNextLcsOrient,winFirstString,winNextString,winFirstRegion,winNextRegion]
+                
+                outfh.write('\t'.join([str(subItem for subItem in writeList)]))
+    outfh.close()
     return
   
 def returnRepEleMat(infoMat,rowNbr,sttRow,winSize):
@@ -174,33 +202,25 @@ def returnRepEleMat(infoMat,rowNbr,sttRow,winSize):
                 def __init__(self,repName,repOri,repId,repRegion):
             [sttPos  endPos  orient  eleId  eleFam  lineId  regionAnno]
             '''
-            tmpList.append(RepeatEle(infoMat[i][3],infoMat[i][2],infoMat[i][5],infoMat[i][6]))
+            tmpList.append(RepeatEle(infoMat[i][3],infoMat[i][2],infoMat[i][5],infoMat[i][0]))
         repEleMat.append(tmpList)
         curRow += winSize
     if curRow < rowNbr:
         tmpList=[]
         for i in range(curRow,rowNbr):
-            tmpList.append(RepeatEle(infoMat[i][3],infoMat[i][2],infoMat[i][5],infoMat[i][6]))
+            tmpList.append(RepeatEle(infoMat[i][3],infoMat[i][2],infoMat[i][5],infoMat[i][0]))
         repEleMat.append(tmpList)
     return repEleMat
     
-def processRepList(repEleList1, repEleList2):
-    
-    return
+
+def exonAnno(exonDct,sttPos):
+    for key in exonDct.keys:
+        if int(exonDct[key][0]) < int(sttPos) and int(sttPos) <= int(exonDct[key][1]):
+            return key
+    return 'NASTR'
 
 
 
-
-
-
-
-
-
-
-
-
-
-  
 
 class Lcs:
     def __init__(self,longStr,shortStr):
@@ -210,6 +230,7 @@ class Lcs:
             self.lcs : longest common sequence list
             self.refLong : returns refined long string in list form, '_' stands for deletion
             self.refShort : returns refined short string in list form, '_' stands for deletion
+        adding a region start and end position to Lcs, by extracting max and min of coordinates
         '''
         if len(longStr) >= len(shortStr):
             self.longStr=longStr
@@ -228,6 +249,8 @@ class Lcs:
         self.lcs=[]
         self.upperLcsOri=[]
         self.lowerLcsOri=[]
+        self.upperLcsSttPos=[]
+        self.lowerLcsSttPos=[]
         
         self._analysis()
         
@@ -295,6 +318,13 @@ class Lcs:
                 self.refShort.insert(0,self._matrix[i][j].lowerEle)
                 if self._matrix[i][j].upperEle == self._matrix[i][j].lowerEle:
                     self.lcs.insert(0,self._matrix[i][j].upperEle)
+                    
+                    self.upperLcsOri.insert(0,self._matrix[i][j].upperOri)
+                    self.lowerLcsOri.insert(0,self._matrix[i][j].lowerOri)
+                    
+                    self.upperLcsSttPos.insert(0,self._matrix[i][j].sttPos)
+                    self.lowerLcsSttPos.insert(0,self._matrix[i][j].sttPos)
+                    
                 i -= 1
                 j -= 1
             elif cellPointer == 2:
@@ -377,6 +407,9 @@ class Cell:
         self.upperId=upperEle.repId
         self.lowerId=lowerEle.repId
         
+        self.upperSttPos=upperEle.sttPos
+        self.lowerSttPos=lowerEle.sttPos
+        
         self.rowNbr=rowNbr
         self.colNbr=colNbr
         self.value=value
@@ -384,8 +417,8 @@ class Cell:
         self.prevCell=prevCell
 
 class RepeatEle:
-    def __init__(self,repName,repOri,repId,repRegion):
+    def __init__(self,repName,repOri,repId,sttPos):
         self.repName=repName
         self.repOri=repOri
         self.repId=repId
-        self.repRegion=repRegion
+        self.sttPos=sttPos
