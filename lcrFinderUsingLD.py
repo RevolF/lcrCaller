@@ -73,9 +73,12 @@ def main():
     global options
     exonDct=getExonDct(options.exonDct)
     infoMat=splitRpFile(options.rpFile,exonDct)
+    
     rpName=options.rpFile.split('/')[-1].rstrip('out')
+    
     matOutName=options.workDir + '/' + rpName + 'mat.out'
     writeMatrix(infoMat,matOutName)
+    
     lcrResFile=options.workDir+'/'+rpName+'.'+options.winSize+'.lcsResMat.out'
     slideWin(infoMat,options.winSize,lcrResFile,exonDct)
     return
@@ -106,7 +109,7 @@ def splitRpFile(rpFile, exonDct):
         '''
         magic variables here, change if plan modified
         '''
-        if float(linear[1]) < 15 and float(linear[2]) < 8 and float(linear[3]) < 0:
+        if float(linear[1]) < 15 and float(linear[2]) < 8 and float(linear[3]) < 8:
             markStt=linear[4].split('-')[0].split(':')[1]
             sttPos=int(markStt)+int(linear[5])
             endPos=int(markStt)+int(linear[6])
@@ -169,24 +172,24 @@ def slideWin(infoMat,winSize,lcsResFile,exonDct):
                 winNextLcsOrient=''.join(lcsObj.lowerLcsOri)
                 winFirstString=','.join(lcsObj.refLong)
                 winNextString=','.join(lcsObj.refShort)
-
-                winFirstStt=min([int(subPos) for subPos in lcsObj.upperLcsSttPos])
-                winFirstEnd=max([int(subPos) for subPos in lcsObj.lowerLcsSttPos])
-                winFirstSttRegion=exonAnno(exonDct,winFirstStt)
-                winFirstEndRegion=exonAnno(exonDct,winFirstEnd)
-                winFirstRegion=winFirstSttRegion+'---'+winFirstEndRegion
                 
-                winNextStt=min([int(subPos) for subPos in lcsObj.lowerLcsSttPos])
-                winNextEnd=max([int(subPos) for subPos in lcsObj.lowerLcsSttPos])
-                winNextSttRegion=exonAnno(exonDct,winNextStt)
-                winNextEndRegion=exonAnno(exonDct,winNextEnd)
-                winNextRegion=winNextSttRegion+'---'+winNextEndRegion
+                winFirstRegion=winRegionAnno(exonDct,lcsObj.upperLcsSttPos)
+                winNextRegion=winRegionAnno(exonDct,lcsObj.lowerLcsSttPos)
                 
                 writeList=[i,j,k,score,lcsObj.lcs,winFirstLcsOrient,winNextLcsOrient,winFirstString,winNextString,winFirstRegion,winNextRegion]
                 
                 outfh.write('\t'.join([str(subItem for subItem in writeList)]))
     outfh.close()
     return
+    
+def winRegionAnno(exonDct,sttPosLst):
+    sttPosLst=[int(i) for i in sttPosLst]
+    sttPos=min(sttPosLst)
+    endPos=max(sttPosLst)
+    sttPosAnno=exonAnno(exonDct,sttPos)
+    endPosAnno=exonAnno(exonDct,endPos)
+    winRegion=sttPosAnno+'---'+endPosAnno
+    return winRegion
   
 def returnRepEleMat(infoMat,rowNbr,sttRow,winSize):
     '''
@@ -422,3 +425,7 @@ class RepeatEle:
         self.repOri=repOri
         self.repId=repId
         self.sttPos=sttPos
+        
+        
+if __name__=='__main__':
+    main()
