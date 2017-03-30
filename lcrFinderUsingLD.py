@@ -44,7 +44,7 @@ parser.add_option(
     '-E',
     '--exon-dict',
     dest='exonDct',
-    help='exon dict for exon annotation',
+    help='exon dict for exon annotation, default set to /media/disk2/ljzhang/data/dmdExons/dmd.exons.txt',
     default='/media/disk2/ljzhang/data/dmdExons/dmd.exons.txt'
     )
 
@@ -79,7 +79,7 @@ def main():
     matOutName=options.workDir + '/' + rpName + 'mat.out'
     writeMatrix(infoMat,matOutName)
     
-    lcrResFile=options.workDir+'/'+rpName+'.'+options.winSize+'.lcsResMat.out'
+    lcrResFile=options.workDir+'/' + rpName + 'winSize.' + options.winSize + '.lcsResMat.out'
     slideWin(infoMat,options.winSize,lcrResFile,exonDct)
     return
     
@@ -147,12 +147,14 @@ def getExonDct(dmdExon):
 def writeMatrix(infoMat,fileName):
     outfh=open(fileName,'w')
     for subList in infoMat:
-        outfh.write('\t'.join(subList)+'\n')
+        outfh.write('\t'.join([str(i) for i in subList])+'\n')
     outfh.close()
     return
 
 def slideWin(infoMat,winSize,lcsResFile,exonDct):
     winSize=int(winSize)
+    
+    print 'inside slideWin'
     
     outfh=open(lcsResFile,'w')
     header='winStartPos\twinFirstId\twinNextId\tmatchScore\trepEleLcs\twinFirstLcsOrient\twinNextLcsOrient\twinFirstString\twinNextString\twinFirstRegion\twinNextRegion\n'
@@ -162,12 +164,16 @@ def slideWin(infoMat,winSize,lcsResFile,exonDct):
     
     for i in range(winSize):
         repEleMat=returnRepEleMat(infoMat,rowNbr,i,winSize)
+        print 'winSlide: '+str(i)+' out of '+str(winSize)
         repEleMatRowNbr=len(repEleMat)
         
         for j in range(repEleMatRowNbr):
-            for k in range(j+1,repEleMatRowNbr+1):
+            if (j+1) == repEleMatRowNbr:
+                break
+            for k in range(j+1,repEleMatRowNbr):
                 lcsObj=Lcs(repEleMat[j],repEleMat[k])
-                score=round(200*len(lcsObj.lcs)/(len(lcsObj.colNbr)+len(lcsObj.rowNbr)),3)
+                score=round(200*len(lcsObj.lcs)/(lcsObj.colNbr+lcsObj.rowNbr),3)
+                
                 winFirstLcsOrient=''.join(lcsObj.upperLcsOri)
                 winNextLcsOrient=''.join(lcsObj.lowerLcsOri)
                 winFirstString=','.join(lcsObj.refLong)
@@ -178,12 +184,14 @@ def slideWin(infoMat,winSize,lcsResFile,exonDct):
                 
                 writeList=[i,j,k,score,lcsObj.lcs,winFirstLcsOrient,winNextLcsOrient,winFirstString,winNextString,winFirstRegion,winNextRegion]
                 
-                outfh.write('\t'.join([str(subItem for subItem in writeList)]))
+                outfh.write('\t'.join([str(subItem) for subItem in writeList])+'\n')
     outfh.close()
     return
     
 def winRegionAnno(exonDct,sttPosLst):
     sttPosLst=[int(i) for i in sttPosLst]
+    if sttPosLst==[]:
+        return 'NASTR'
     sttPos=min(sttPosLst)
     endPos=max(sttPosLst)
     sttPosAnno=exonAnno(exonDct,sttPos)
@@ -197,7 +205,7 @@ def returnRepEleMat(infoMat,rowNbr,sttRow,winSize):
     '''
     repEleMat=[]
     curRow=sttRow
-    while curRow <= rowNbr:
+    while (curRow + winSize) <= rowNbr:
         tmpList=[]
         for i in range(curRow,curRow+winSize):
             '''
@@ -217,7 +225,7 @@ def returnRepEleMat(infoMat,rowNbr,sttRow,winSize):
     
 
 def exonAnno(exonDct,sttPos):
-    for key in exonDct.keys:
+    for key in exonDct.keys():
         if int(exonDct[key][0]) < int(sttPos) and int(sttPos) <= int(exonDct[key][1]):
             return key
     return 'NASTR'
@@ -263,14 +271,17 @@ class Lcs:
                 and shortStr for index of rows
         Cell:
             lowerEle,upperEle,rowNbr,colNbr,value=0,cellPointer='',prevCell=''
+        RepeatEle:
+            self,repName,repOri,repId,sttPos
         '''
         cellMatrix=[]
-        firstRow=[Cell('NASTR','NASTR',-1,-1)]
+        emptyRepEle=RepeatEle('NASTR','NASTR','NASTR','0')
+        firstRow=[Cell(emptyRepEle,emptyRepEle,-1,-1)]
         for i in range(self.colNbr):
-            firstRow.append(Cell('NASTR',self.longStr[i],0,i,i+1))
+            firstRow.append(Cell(emptyRepEle,self.longStr[i],0,i,i+1))
         cellMatrix.append(firstRow)
         for i in range(self.rowNbr):
-            tmpRow=[Cell(self.shortStr[i],'NASTR',i,-1,i+1)]
+            tmpRow=[Cell(self.shortStr[i],emptyRepEle,i,-1,i+1)]
             for j in range(self.colNbr):
                 tmpRow.append(Cell(self.shortStr[i],self.longStr[j],i,j))
             cellMatrix.append(tmpRow)
@@ -322,11 +333,16 @@ class Lcs:
                 if self._matrix[i][j].upperEle == self._matrix[i][j].lowerEle:
                     self.lcs.insert(0,self._matrix[i][j].upperEle)
                     
+                    '''
+                    Cell:
+                        lowerEle,upperEle,rowNbr,colNbr,value=0,cellPointer='',prevCell=''
+                    '''
+                    
                     self.upperLcsOri.insert(0,self._matrix[i][j].upperOri)
                     self.lowerLcsOri.insert(0,self._matrix[i][j].lowerOri)
                     
-                    self.upperLcsSttPos.insert(0,self._matrix[i][j].sttPos)
-                    self.lowerLcsSttPos.insert(0,self._matrix[i][j].sttPos)
+                    self.upperLcsSttPos.insert(0,self._matrix[i][j].upperSttPos)
+                    self.lowerLcsSttPos.insert(0,self._matrix[i][j].lowerSttPos)
                     
                 i -= 1
                 j -= 1
